@@ -1,0 +1,187 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset="UTF-8">
+    <title>Insert title here</title>
+    <style>
+      html, body {
+        width: 100%;
+        height: 100%;
+        background: #ffffff;
+      }
+      #view {
+        height: 90%;
+        font-size: 500px;
+        text-align: center;        
+      }
+      #step {
+        text-align: center;
+      }
+    </style>
+  </head>
+<body>
+  <audio id="speaker" src=""></audio>
+  <div id="view"></div>
+  <div id="step"></div>
+  <div class="config">
+    <label>Таймаут (секунд):</label> <input id="timeout" type="number" min="10" value="10">
+    <label>Голос:</label>
+    <select id="voice">
+      <option value="zahar">Захар</option>
+      <option value="ermil">Эмиль</option>
+      <option value="jane">Жанна</option>
+      <option value="omazh">Оля</option>
+    </select>
+    <label>
+      <input type="checkbox" id="childmode"> Детский режим
+    </label>
+    <button id="start">Начать</button>
+    <button id="pause" disabled>Остановить</button>
+    <button id="reset" disabled>Сбросить</button>
+    <button id="fullscreen">На весь экран</button>
+  </div>
+</body>
+<script>
+
+function * lotto() {
+	var steps = new Set(),
+		result;
+	
+	for (var i = 1, imax = 90; i <= imax; ++i) {
+    	do {
+    		result = Math.floor(Math.random() * imax + 1);
+    	} while (steps.has(result));
+		
+    	steps.add(result);
+    	yield {
+    		step: i,
+    		number: result,
+    		all: steps
+  		};
+	}
+}
+
+function toggleFullScreen() {
+    if (!document.fullscreenElement &&    // alternative standard method
+        !document.mozFullScreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement) {  // current working methods
+        if (document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen();
+        } else if (document.documentElement.msRequestFullscreen) {
+            document.documentElement.msRequestFullscreen();
+        } else if (document.documentElement.mozRequestFullScreen) {
+            document.documentElement.mozRequestFullScreen();
+        } else if (document.documentElement.webkitRequestFullscreen) {
+            document.documentElement.webkitRequestFullscreen(Element.ALLOW_KEYBOARD_INPUT);
+        }
+    } else {
+        if (document.exitFullscreen) {
+            document.exitFullscreen();
+        } else if (document.msExitFullscreen) {
+            document.msExitFullscreen();
+        } else if (document.mozCancelFullScreen) {
+            document.mozCancelFullScreen();
+        } else if (document.webkitExitFullscreen) {
+            document.webkitExitFullscreen();
+        }
+    }
+    return !document.fullscreenElement && 
+        !document.mozFullScreenElement && !document.webkitFullscreenElement && !document.msFullscreenElement;
+}
+
+function say(speaker, text, voice, callback) {
+	var url = 'https://tts.voicetech.yandex.net/generate?text='+text+'&format=mp3&lang=ru-RU&speaker='+voice+'&emotion=good&key=be88cd80-a65f-4b2b-a9e1-d1930b3c96ad';
+    speaker.src = url;
+    speaker.callback = callback;
+    speaker.play();
+}
+
+var speaker = document.getElementById('speaker');
+speaker.addEventListener('ended', function () {
+   if (this.callback) {
+       this.callback();
+   } 
+});
+var view = document.getElementById('view');
+var current = document.getElementById('step');
+var timeout = document.getElementById('timeout');
+var voice = document.getElementById('voice');
+var start = document.getElementById('start');
+var childmode = document.getElementById('childmode');
+var pause = document.getElementById('pause');
+var reset = document.getElementById('reset');
+var fullscreen = document.getElementById('fullscreen');
+
+fullscreen.onclick = function () {
+    var result = toggleFullScreen();
+    
+    this.innerHTML = result ? 'Во весь экран' : 'В окне';  
+};
+
+start.onclick = function () {
+    stepper = lotto();
+	start.disabled = true;
+    start.started = true;
+    pause.disabled = false;
+    reset.disabled = false;
+    say(speaker, 'Приготовьтесь. Игра начентся через ' + timeout.value + ' секунд.', voice.value, function () {
+        gameTimer = setTimeout(play, timeout.value * 1000);
+    });
+}
+
+reset.onclick = function () {
+    say(speaker, 'Игра отменена. Сыграем в другой раз.', voice.value);
+    start.disabled = false;
+    start.started = false;
+    pause.disabled = true;
+    pause.paused = false;
+    reset.disabled = true;
+    current.innerHTML = ''; 
+    view.innerHTML = '';
+    clearTimeout(gameTimer);
+}
+
+pause.onclick = function () {
+    if (this.paused) {
+        this.paused = false;
+        this.innerHTML = 'Остановить';
+        say(speaker, 'Приготовьтесь. Продолжим через ' + timeout.value + ' секунд', voice.value, function () {
+            gameTimer = setTimeout(play, timeout.value * 1000);            
+        });
+    } else {
+        this.paused = true;
+        this.innerHTML = 'Возобновить';
+        clearTimeout(gameTimer);
+        say(speaker, 'Игра остановлена. Можно передохнуть.', voice.value);
+    }
+}
+
+var stepper, gameTimer;
+function play() {
+    if (pause.paused || !start.started) return;
+	var step = stepper.next();
+	if (!step.done) {
+		current.innerHTML = 'Шаг ' + step.value.step + ' из 90'; 
+		view.innerHTML = step.value.number;
+		say(speaker, step.value.number, voice.value, function () {
+            var word = step.value.number + '';
+            if (2 === word.length && childmode.checked) {
+                say(speaker, word[0] + ' ' + word[1], voice.value, function () {
+                    gameTimer = setTimeout(play, timeout.value * 1000);            
+                });
+            } else {
+                gameTimer = setTimeout(play, timeout.value * 1000);        
+            }
+        });
+        
+		
+	} else {
+		say(speaker, 'Игра окончена', voice.value);
+		start.disabled = false;
+        pause.disabled = true;
+        reset.disabled = true;
+	}
+}
+
+
+</script>
+</html>
